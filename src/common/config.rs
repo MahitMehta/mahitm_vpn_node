@@ -9,6 +9,8 @@ pub struct Node {
     pub ipv4: String,
     pub src_port: u16,
     pub dst_port: u16,
+    pub network_adapter: String,
+    pub conf_path: String,
 }
 
 #[derive(Debug, Deserialize)]
