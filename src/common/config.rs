@@ -6,6 +6,9 @@ pub const CONFIG_FILENAME: &'static str = "config.toml";
 #[derive(Debug, Deserialize)]
 pub struct Node {
     pub id: String,
+    pub ipv4: String,
+    pub src_port: u16,
+    pub dst_port: u16,
 }
 
 #[derive(Debug, Deserialize)]
