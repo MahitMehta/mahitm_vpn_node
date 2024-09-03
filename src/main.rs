@@ -2,7 +2,6 @@ mod common;
 mod utils;
 
 use common::config::Config;
-use futures_util::future::{BoxFuture, FutureExt};
 use futures_util::{stream::StreamExt, SinkExt};
 use log::{debug, error, info, warn};
 use serde_derive::{Deserialize, Serialize};
@@ -170,7 +169,7 @@ impl NodeWebSocket {
         let (stream, _) = connect_async(url)
             .await
             .expect("Failed to Connect to Control Plane");
-    
+
         info!("Connected to Control Plane");
 
         if config.node.private_key.is_none() || config.node.public_key.is_none() {
@@ -205,10 +204,9 @@ impl NodeWebSocket {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         error!("Attempting Reconnection to Control Plane");
-        self.state.active = false; 
+        self.state.active = false;
 
-        let (stream, _) = connect_async(url)
-            .await?;
+        let (stream, _) = connect_async(url).await?;
         self.stream = stream;
 
         Ok(())
@@ -452,13 +450,13 @@ impl NodeWebSocket {
                 Ok(_) => {}
                 Err(e) => {
                     error!("Run Wrapper Error: {}", e);
-                    
+
                     for _ in 0..5 {
                         match self.reconnect(url).await {
                             Ok(_) => {
                                 info!("Reconnected to Control Plane");
                                 let _ = Box::pin(self.run_wrapper(url).await);
-                                break; 
+                                break;
                             }
                             Err(e) => {
                                 error!("Reconnection Error: {}", e);
