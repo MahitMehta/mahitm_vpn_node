@@ -2,10 +2,13 @@ mod common;
 mod utils;
 
 use common::config::Config;
+use futures_util::future::{BoxFuture, FutureExt};
 use futures_util::{stream::StreamExt, SinkExt};
 use log::{debug, error, info, warn};
 use serde_derive::{Deserialize, Serialize};
+use std::future::Future;
 use std::io::Write;
+use std::pin::Pin;
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -162,23 +165,12 @@ impl Display for WireguardConf {
 }
 
 impl NodeWebSocket {
-    async fn new(mut config: Config) -> Self {
-        let url = format!(
-            "{}://{}/node?id={}",
-            if config.control_plane.secure {
-                "wss"
-            } else {
-                "ws"
-            },
-            config.control_plane.host,
-            config.node.id
-        );
-
+    async fn new(url: &String, mut config: Config) -> Self {
         info!("Connecting to {}", url);
         let (stream, _) = connect_async(url)
             .await
             .expect("Failed to Connect to Control Plane");
-
+    
         info!("Connected to Control Plane");
 
         if config.node.private_key.is_none() || config.node.public_key.is_none() {
@@ -207,6 +199,19 @@ impl NodeWebSocket {
             config,
             stream,
         }
+    }
+
+    async fn reconnect(&mut self, url: &String) -> Result<(), Box<dyn std::error::Error>> {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        error!("Attempting Reconnection to Control Plane");
+        self.state.active = false; 
+
+        let (stream, _) = connect_async(url)
+            .await?;
+        self.stream = stream;
+
+        Ok(())
     }
 
     async fn create_peer(&mut self, create_peer: CreatePeer) {
@@ -441,7 +446,34 @@ impl NodeWebSocket {
             .unwrap();
     }
 
-    async fn run(&mut self) {
+    fn run_wrapper<'a>(&'a mut self, url: &'a String) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            match self.run().await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Run Wrapper Error: {}", e);
+                    
+                    for _ in 0..5 {
+                        match self.reconnect(url).await {
+                            Ok(_) => {
+                                info!("Reconnected to Control Plane");
+                                let _ = Box::pin(self.run_wrapper(url).await);
+                                break; 
+                            }
+                            Err(e) => {
+                                error!("Reconnection Error: {}", e);
+                            }
+                        }
+                    }
+
+                    error!("Reconnection Attempts Exhausted, Exiting");
+                    exit(1);
+                }
+            }
+        })
+    }
+
+    async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.request_tunnel().await;
 
         let mut interval = tokio::time::interval(Duration::from_millis(1000));
@@ -464,7 +496,13 @@ impl NodeWebSocket {
                     }
                 }
                 _ = interval.tick() => {
-                    self.stream.send(Message::Ping(vec![])).await.unwrap();
+                    match self.stream.send(Message::Ping(vec![])).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("Failed to send Ping");
+                            return Err(Box::new(e));
+                        }
+                    }
                 }
             }
         }
@@ -480,6 +518,18 @@ async fn main() {
         exit(1);
     });
 
-    let mut node_ws = NodeWebSocket::new(config).await;
-    node_ws.run().await;
+    let url = format!(
+        "{}://{}/node?id={}",
+        if config.control_plane.secure {
+            "wss"
+        } else {
+            "ws"
+        },
+        config.control_plane.host,
+        config.node.id
+    );
+
+    let mut node_ws = NodeWebSocket::new(&url, config).await;
+    node_ws.run_wrapper(&url).await;
+    // begin_process(config, url);
 }
