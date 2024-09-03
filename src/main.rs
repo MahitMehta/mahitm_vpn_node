@@ -243,7 +243,11 @@ impl NodeWebSocket {
             }
         };
 
-        match utils::add_peer_to_conf(&ipv4, &public_key) {
+        match utils::add_peer_to_conf(
+            &self.config.node.wg_interface, 
+            &ipv4, 
+            &public_key
+        ) {
             Ok(_) => {
                 info!(
                     "Peer @{ipv4} added to Wireguard Config, user_id: {}",
@@ -297,7 +301,11 @@ impl NodeWebSocket {
             return;
         }
         let peer = peer.unwrap().1;
-        match utils::remove_peer_from_conf(&peer.ipv4, &peer.public_key) {
+        match utils::remove_peer_from_conf(
+            &self.config.node.wg_interface,
+            &peer.ipv4, 
+            &peer.public_key
+        ) {
             Ok(_) => {
                 info!(
                     "Peer @{} removed from Wireguard Config, user_id: {}",

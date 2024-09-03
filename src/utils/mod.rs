@@ -34,17 +34,18 @@ pub fn generate_public_key(wg_private_key: &String) -> Result<String, Box<dyn Er
 }
 
 pub fn add_peer_to_conf(
-    peer_ipv4: &String,
-    peer_public_key: &String,
+    wg_inteface: &String,
+    ipv4: &String,
+    public_key: &String,
 ) -> Result<(), Box<dyn Error>> {
     let output = Command::new("wg")
         .args([
             "set",
-            "wg0",
+            wg_inteface,
             "peer",
-            peer_public_key,
+            public_key,
             "allowed-ips",
-            format!("{}/32", peer_ipv4).as_str(),
+            format!("{}/32", ipv4).as_str(),
         ])
         .stdout(Stdio::piped())
         .output()?;
@@ -52,7 +53,7 @@ pub fn add_peer_to_conf(
     let stderr = String::from_utf8(output.stderr).unwrap();
     if stderr.len() > 0 {
         error!("STDERR: {}", stderr);
-        return Err("Failed to add peer to wg0".into());
+        return Err(format!("Failed to add peer to {}", wg_inteface).into());
     }
 
     let output = Command::new("ip")
@@ -60,9 +61,9 @@ pub fn add_peer_to_conf(
             "-4",
             "route",
             "add",
-            format!("{}/32", peer_ipv4).as_str(),
+            format!("{}/32", ipv4).as_str(),
             "dev",
-            "wg0",
+            wg_inteface,
         ])
         .stdout(Stdio::piped())
         .output()?;
@@ -77,18 +78,19 @@ pub fn add_peer_to_conf(
 }
 
 pub(crate) fn remove_peer_from_conf(
+    wg_inteface: &String,
     peer_ipv4: &String,
     peer_public_key: &String,
 ) -> Result<(), Box<dyn Error>> {
     let output = Command::new("wg")
-        .args(["set", "wg0", "peer", peer_public_key, "remove"])
+        .args(["set", wg_inteface, "peer", peer_public_key, "remove"])
         .stdout(Stdio::piped())
         .output()?;
 
     let stderr = String::from_utf8(output.stderr).unwrap();
     if stderr.len() > 0 {
         error!("STDERR: {}", stderr);
-        return Err("Failed to remove peer from wg0".into());
+        return Err(format!("Failed to remove peer from {}", wg_inteface).into());
     }
 
     let output = Command::new("ip")
@@ -98,7 +100,7 @@ pub(crate) fn remove_peer_from_conf(
             "delete",
             format!("{}/32", peer_ipv4).as_str(),
             "dev",
-            "wg0",
+            wg_inteface,
         ])
         .stdout(Stdio::piped())
         .output()?;
