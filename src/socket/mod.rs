@@ -45,7 +45,7 @@ impl NodeWebSocket {
         info!("Connected to Control Plane");
         let private_key = match WireguardConf::get_private_key(&config) {
             Ok(k) => k,
-            Err(e) => match utils::generate_private_key() {
+            Err(_) => match utils::generate_private_key() {
                 Ok(k) => k,
                 Err(e) => {
                     error!("{}", e);
@@ -212,7 +212,7 @@ impl NodeWebSocket {
         });
 
         let post_up = format!(
-            "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o {} -j MASQUERADE; iptables -A INPUT -p udp -m udp --dport {} -j ACCEPT; iptables -A FORWARD -i {} -j ACCEPT; iptables -A FORWARD -o {} -j ACCEPT;",
+            "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o {} -j MASQUERADE;iptables -A INPUT -p udp -m udp --dport {} -j ACCEPT;iptables -A FORWARD -i {} -j ACCEPT;iptables -A FORWARD -o {} -j ACCEPT;",
             self.config.node.network_adapter,
             self.config.node.src_port,
             self.config.node.wg_interface,
@@ -244,6 +244,7 @@ impl NodeWebSocket {
                     .write_all(wg_conf.to_string().as_bytes())
                     .await
                     .expect("Failed to update wg conf");
+                output.flush().await.expect("Failed to flush wg conf");
             }
             Err(e) => {
                 error!("Failed to open Wireguard Config: {}", e);
