@@ -4,3 +4,6 @@
 # config
 wireguard/
 config.toml
+
+# env vars
+.envrc

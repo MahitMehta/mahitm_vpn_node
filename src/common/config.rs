@@ -1,5 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
-use std::fs;
+use std::{env, fs, path::Path};
 
 pub const CONFIG_FILENAME: &'static str = "config.toml";
 
@@ -11,9 +11,7 @@ pub struct Node {
     pub dst_port: u16,
     pub network_adapter: String,
     pub wg_interface: String,
-    pub conf_path: String,
-    pub private_key: Option<String>,
-    pub public_key: Option<String>,
+    pub conf_dir: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,7 +28,11 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> Result<Self, String> {
-        let contents = match fs::read_to_string(CONFIG_FILENAME) {
+        let config_dir = env::var("CONFIG_DIR").unwrap_or_else(|_| "./".to_string());
+        let config_path = Path::new(&config_dir).join(CONFIG_FILENAME);
+        println!("Loading config from: {:?}", config_path);
+
+        let contents = match fs::read_to_string(config_path) {
             Ok(c) => c,
             Err(e) => {
                 return Err(format!("Unable to retrieve Node config: {e}"));
@@ -46,13 +48,5 @@ impl Config {
         };
 
         Ok(config)
-    }
-
-    pub fn update_keys(&mut self, private_key: String, public_key: String) {
-        self.node.private_key = Some(private_key);
-        self.node.public_key = Some(public_key);
-
-        let contents = toml::to_string(&self).unwrap();
-        fs::write(CONFIG_FILENAME, contents).unwrap();
     }
 }

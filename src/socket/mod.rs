@@ -1,16 +1,16 @@
 mod types;
 
 use futures_util::{stream::StreamExt, SinkExt};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::future::Future;
-use std::io::Write;
 use std::pin::Pin;
 use std::{
     collections::HashMap,
-    fs::File,
     process::{exit, Stdio},
     time::Duration,
 };
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 use tokio::{net::TcpStream, process::Command};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use types::{
@@ -24,6 +24,8 @@ use crate::utils;
 #[derive(Debug)]
 pub struct State {
     active: bool,
+    private_key: String,
+    public_key: String,
     peers: HashMap<String, Peer>,
 }
 
@@ -34,36 +36,38 @@ pub struct NodeWebSocket {
 }
 
 impl NodeWebSocket {
-    pub async fn new(url: &String, mut config: Config) -> Self {
+    pub async fn new(url: &String, config: Config) -> Self {
         info!("Connecting to {}", url);
         let (stream, _) = connect_async(url)
             .await
             .expect("Failed to Connect to Control Plane");
 
         info!("Connected to Control Plane");
+        let private_key = match WireguardConf::get_private_key(&config) {
+            Ok(k) => k,
+            Err(e) => match utils::generate_private_key() {
+                Ok(k) => k,
+                Err(e) => {
+                    error!("{}", e);
+                    exit(1);
+                }
+            },
+        };
 
-        if config.node.private_key.is_none() || config.node.public_key.is_none() {
-            let wg_private_key = match utils::generate_private_key() {
-                Ok(k) => k,
-                Err(e) => {
-                    error!("{}", e);
-                    exit(1);
-                }
-            };
-            let wg_public_key = match utils::generate_public_key(&wg_private_key) {
-                Ok(k) => k,
-                Err(e) => {
-                    error!("{}", e);
-                    exit(1);
-                }
-            };
-            config.update_keys(wg_private_key, wg_public_key);
-        }
+        let public_key = match utils::generate_public_key(&private_key) {
+            Ok(k) => k,
+            Err(e) => {
+                error!("{}", e);
+                exit(1);
+            }
+        };
 
         Self {
             state: State {
                 active: false,
                 peers: HashMap::new(),
+                private_key,
+                public_key,
             },
             config,
             stream,
@@ -217,22 +221,29 @@ impl NodeWebSocket {
 
         let wg_conf = WireguardConf {
             interface: WireguardInterface {
-                private_key: self.config.node.private_key.clone().unwrap(),
+                private_key: self.state.private_key.clone(),
                 address: format!("{}/24", "10.8.0.1"),
                 listen_port: self.config.node.src_port,
-                post_up,
+                post_up
             },
         };
 
         let path = format!(
             "{}/{}.conf",
-            self.config.node.conf_path, self.config.node.wg_interface
+            self.config.node.conf_dir, self.config.node.wg_interface
         );
 
-        // TODO: Replace with OpenOptions
-        match File::create(&path) {
+        match OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&path)
+            .await
+        {
             Ok(mut output) => {
-                write!(output, "{}", wg_conf).expect("Failed to update wg conf");
+                output
+                    .write_all(wg_conf.to_string().as_bytes())
+                    .await
+                    .expect("Failed to update wg conf");
             }
             Err(e) => {
                 error!("Failed to open Wireguard Config: {}", e);
@@ -260,6 +271,7 @@ impl NodeWebSocket {
 
     async fn handle_node_message(&mut self, msg: Message) {
         let node_msg: NodeMessageType = serde_json::from_str(&msg.to_string()).unwrap();
+        debug!("Received Message: {:?}", node_msg);
         match ENodeMessage::from(node_msg.r#type) {
             ENodeMessage::RequestTunnelResponse => {
                 let request_tunnel_res: NodeMessage<RequestTunnelResponse> =
@@ -306,7 +318,7 @@ impl NodeWebSocket {
                         ipv4: self.config.node.ipv4.clone(),
                         src_port: self.config.node.src_port,
                         dst_port: self.config.node.dst_port,
-                        public_key: self.config.node.public_key.clone().unwrap(),
+                        public_key: self.state.public_key.clone(),
                     },
                 })
                 .unwrap(),
@@ -355,7 +367,7 @@ impl NodeWebSocket {
                     if let Some(msg) = msg {
                         if let Ok(msg) = msg {
                             if msg.is_pong() {
-                                debug!("Received Pong");
+                                trace!("Received Pong");
                                 continue;
                             }
 
