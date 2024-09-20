@@ -1,17 +1,16 @@
 mod types;
 
 use futures_util::{stream::StreamExt, SinkExt};
+
 use log::{debug, error, info, trace, warn};
-use std::future::Future;
-use std::pin::Pin;
 use std::{
     collections::HashMap,
+    future::Future,
+    pin::Pin,
     process::{exit, Stdio},
     time::Duration,
 };
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
-use tokio::{net::TcpStream, process::Command};
+use tokio::{fs::OpenOptions, io::AsyncWriteExt, net::TcpStream, process::Command};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use types::{
     CreatePeer, CreatePeerResponse, ENodeMessage, NodeMessage, NodeMessageType, Peer, RemovePeer,
@@ -178,13 +177,16 @@ impl NodeWebSocket {
         ) {
             Ok(_) => {
                 info!(
-                    "Peer @{} removed from Wireguard Config, user_id: {}",
+                    "Peer @{} removed from Wireguard Config for user_id={}",
                     peer.ipv4, peer.user_id
                 );
                 self.state.peers.remove(&peer.ipv4.clone());
             }
             Err(e) => {
-                error!("Failed to remove Peer from Wireguard Config: {}", e);
+                error!(
+                    "Failed to add Peer @ {} for user_id={} to Wireguard Config: {}",
+                    peer.ipv4, peer.user_id, e
+                );
                 self.state.peers.remove(&peer.ipv4.clone());
                 return;
             }
@@ -207,10 +209,6 @@ impl NodeWebSocket {
     async fn tunnel_setup(&mut self, request_tunnel_res: RequestTunnelResponse) {
         self.state.active = true;
 
-        request_tunnel_res.peers.iter().for_each(|peer| {
-            self.state.peers.insert(peer.ipv4.clone(), peer.clone());
-        });
-
         let post_up = format!(
             "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o {} -j MASQUERADE;iptables -A INPUT -p udp -m udp --dport {} -j ACCEPT;iptables -A FORWARD -i {} -j ACCEPT;iptables -A FORWARD -o {} -j ACCEPT;",
             self.config.node.network_adapter,
@@ -224,7 +222,7 @@ impl NodeWebSocket {
                 private_key: self.state.private_key.clone(),
                 address: format!("{}/24", "10.8.0.1"),
                 listen_port: self.config.node.src_port,
-                post_up
+                post_up,
             },
         };
 
@@ -268,6 +266,32 @@ impl NodeWebSocket {
         if stderr.len() > 0 {
             warn!("Error while starting wg interface: {}", stderr);
         }
+
+        request_tunnel_res.peers.iter().for_each(|peer| {
+            self.state.peers.insert(peer.ipv4.clone(), peer.clone());
+
+            match utils::add_peer_to_conf(
+                &self.config.node.wg_interface,
+                &peer.ipv4,
+                &peer.public_key,
+            ) {
+                Ok(_) => {
+                    debug!(
+                        "Peer @{} re-added to Wireguard Config for user_id={}",
+                        peer.ipv4, peer.user_id
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to add Peer @ {} for user_id={} to Wireguard Config: {}",
+                        peer.ipv4, peer.user_id, e
+                    );
+                    return;
+                }
+            }
+        });
+
+        info!("Wireguard Interface Started");
     }
 
     async fn handle_node_message(&mut self, msg: Message) {

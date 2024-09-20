@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use log::debug;
 use serde::Deserialize;
 use serde_derive::{Deserialize, Serialize};
 use serde_ini::{Deserializer, Parser};
@@ -132,11 +133,12 @@ impl WireguardConf {
     pub fn get_private_key(config: &Config) -> Result<String, Box<dyn std::error::Error>> {
         let config_path =
             Path::new(&config.node.conf_dir).join(format!("{}.conf", config.node.wg_interface));
-        println!("Loading config from: {:?}", config_path);
+        debug!("Loading config from: {:?}", config_path);
 
         let contents = match fs::read_to_string(config_path) {
             Ok(c) => c,
             Err(e) => {
+                debug!("{}", format!("Unable to retrieve Wireguard config: {e}"));
                 return Err(format!("Unable to retrieve Wireguard config: {e}").into());
             }
         };
