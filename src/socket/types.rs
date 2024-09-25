@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_derive::{Deserialize, Serialize};
 use serde_ini::{Deserializer, Parser};
 
-use crate::common::config::Config;
+use crate::common::config::{Config, User};
 
 #[derive(Deserialize, Debug)]
 pub enum ENodeMessage {
@@ -73,6 +73,8 @@ pub struct RequestTunnel {
     pub dst_port: u16,
     #[serde(rename = "srcPort")]
     pub src_port: u16,
+    #[serde(rename = "userRules")]
+    pub user_rules: Vec<User>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

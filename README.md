@@ -1,6 +1,6 @@
 # MahitM VPN Node
 
-# Simply Get Started
+# Simply Get Started 
 
 1. Create a `config.toml` file (checkout the [config schema](#Config-Schema) for more information)
 
@@ -13,6 +13,10 @@
 ## Build Docker Image
 
 1. sudo docker build . -t mahitm_vpn_node
+
+# Develop Locally
+
+1. cargo build && sudo RUST_LOG=debug ./target/debug/mahitm_vpn_node
 
 # Config Schema
 ```toml

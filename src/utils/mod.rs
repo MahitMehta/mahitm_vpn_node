@@ -113,3 +113,16 @@ pub(crate) fn remove_peer_from_conf(
 
     Ok(())
 }
+
+// TODO: Create mesh network utils
+// # Allow forwarding of traffic from wg0 to the local IP (10.0.0.142)
+// iptables -A FORWARD -i wg0 -d 10.0.0.142 -j ACCEPT
+
+// # Enable NAT for incoming traffic on wg0 interface to the local IP
+// iptables -t nat -A PREROUTING -i wg0 -d 192.168.2.1 -j DNAT --to-destination 10.0.0.142
+
+// # Allow forwarding traffic from wg0 to the LAN
+// iptables -A FORWARD -i wg0 -o eth0 -j ACCEPT
+
+// # Enable masquerading for outbound traffic
+// iptables -t nat -A POSTROUTING -s 10.0.0.142 -o wg0 -j MASQUERADE

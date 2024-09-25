@@ -21,9 +21,23 @@ pub struct ControlPlane {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct Mesh {
+    pub id: String,
+    pub ipv4: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct User {
+    pub pattern: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub node: Node,
     pub control_plane: ControlPlane,
+    pub mesh: Option<Mesh>,
+    #[serde(rename = "user", default)]
+    pub user_rules: Vec<User>,
 }
 
 impl Config {
