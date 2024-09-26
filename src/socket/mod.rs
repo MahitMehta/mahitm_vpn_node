@@ -345,6 +345,7 @@ impl NodeWebSocket {
                         dst_port: self.config.node.dst_port,
                         public_key: self.state.public_key.clone(),
                         user_rules: self.config.user_rules.clone(),
+                        mesh: self.config.mesh.clone()
                     },
                 })
                 .unwrap(),

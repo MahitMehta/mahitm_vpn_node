@@ -20,7 +20,7 @@ pub struct ControlPlane {
     pub secure: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Mesh {
     pub id: String,
     pub ipv4: String,
