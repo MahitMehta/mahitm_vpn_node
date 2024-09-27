@@ -1,6 +1,9 @@
 # deps
 /target
 
+# misc
+/runner
+
 # config
 wireguard/
 config.toml
