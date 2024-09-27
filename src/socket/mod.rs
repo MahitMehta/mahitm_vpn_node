@@ -85,8 +85,18 @@ impl NodeWebSocket {
         Ok(())
     }
 
+    fn peer_exists(&self, user_id: &String) -> bool {
+        self.state.peers.iter().any(|(_, peer)| peer.user_id == *user_id)
+    }
+
     async fn create_peer(&mut self, create_peer: CreatePeer) {
         debug!("Create Peer: {:?}", create_peer);
+
+        if self.peer_exists(&create_peer.user_id) {
+            // TODO: Maybe send a response to CP for document creation (just incase it doesn't exist)
+            debug!("Peer already exists: {}", create_peer.user_id);
+            return; 
+        }
 
         let mut n = 2u8;
         let ipv4 = loop {
