@@ -255,7 +255,7 @@ impl NodeWebSocket {
                 output.flush().await.expect("Failed to flush wg conf");
             }
             Err(e) => {
-                error!("Failed to open Wireguard Config: {}", e);
+                panic!("Failed to open Wireguard Config: {}", e);
             }
         }
 
